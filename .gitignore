@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Emoji Clicker+ 🎉</title>
+  <style>
+    body {
+      font-family: 'Comic Sans MS', cursive, sans-serif;
+      background-color: #1a001a;
+      color: #ffccff;
+      text-align: center;
+      padding: 40px;
+      display: flex;
+      justify-content: center;
+    }
+    #game { flex: 1; }
+    #upgrades {
+      margin-left: 50px;
+      text-align: left;
+      max-width: 300px;
+      max-height: 600px;
+      overflow-y: auto;
+    }
+    button.upgrade, #prestige-btn {
+      display: block;
+      margin: 10px 0;
+      padding: 10px;
+      background-color: #330033;
+      color: #ffccff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      width: 100%;
+    }
+    button.upgrade:disabled, #prestige-btn:disabled {
+      background-color: #1a001a;
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    #brainrot-img {
+      font-size: 80px;
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+    #brainrot-img:active { transform: scale(1.1); }
+    #counter { font-size: 28px; margin-top: 20px; }
+    #quote { margin-top: 30px; font-style: italic; color: #cc99ff; }
+  </style>
+</head>
+<body>
+<div id="game">
+  <h1>🎮 Emoji Clicker+ 🎉</h1>
+  <div id="brainrot-img">🤪</div>
+  <div id="counter">Points : 0</div>
+  <div id="quote">Clique pour commencer...</div>
+</div>
+
+<div id="upgrades">
+  <h2>Améliorations :</h2>
+  <div id="upgrade-list"></div>
+  <button id="prestige-btn">🔁 Prestige (100M)</button>
+</div>
+
+<script>
+let points = 0;
+let perClick = 1;
+let auto = 0;
+let upgrades = {};
+let prestigeLevel = 0;
+
+// --- Génération jusqu'à 1000 upgrades ---
+const allUpgradeData = [];
+for (let i = 1; i <= 1000; i++) {
+  allUpgradeData.push({
+    name: "Amélioration " + i,
+    cost: 10 * i * i,
+    emoji: i % 2 === 0 ? "⚡" : "🔥",
+    effect: () => {
+      if (i % 2 === 0) {
+        perClick += Math.ceil(i / 50);
+      } else {
+        auto += Math.ceil(i / 100);
+      }
+    }
+  });
+}
+
+// --- Gestion du déblocage mensuel ---
+let unlockedUpgrades = 900; // base
+let lastUpdate = Date.now();
+
+function checkMonthlyUnlock() {
+  const now = Date.now();
+  const save = localStorage.getItem("emojiClickerSave");
+  if (save) {
+    const data = JSON.parse(save);
+    lastUpdate = data.lastUpdate || Date.now();
+    unlockedUpgrades = data.unlockedUpgrades || 900;
+  } else {
+    unlockedUpgrades = 900;
+  }
+
+  // Combien de mois passés ?
+  const monthsPassed = Math.floor((now - lastUpdate) / (1000 * 60 * 60 * 24 * 30));
+  if (monthsPassed > 0) {
+    unlockedUpgrades = Math.min(allUpgradeData.length, unlockedUpgrades + monthsPassed * 10);
+    lastUpdate = now;
+  }
+}
+
+function saveGame() {
+  localStorage.setItem("emojiClickerSave", JSON.stringify({ 
+    points, perClick, auto, upgrades, prestigeLevel, 
+    unlockedUpgrades, lastUpdate 
+  }));
+}
+
+function loadGame() {
+  const save = localStorage.getItem("emojiClickerSave");
+  if (save) {
+    const data = JSON.parse(save);
+    points = data.points || 0;
+    perClick = data.perClick || 1;
+    auto = data.auto || 0;
+    prestigeLevel = data.prestigeLevel || 0;
+    upgrades = data.upgrades || {};
+    unlockedUpgrades = data.unlockedUpgrades || 900;
+    lastUpdate = data.lastUpdate || Date.now();
+  }
+}
+
+const counter = document.getElementById("counter");
+const quote = document.getElementById("quote");
+const upgradeList = document.getElementById("upgrade-list");
+const prestigeBtn = document.getElementById("prestige-btn");
+
+const phrases = [
+  "Encore un click ?", "Toujours plus 🤡", "💀💀💀", "Ton cerveau fond...",
+  "Internet t’a eu 😔", "T'es un champion du clic 🤪", "+1 dopamine", "Scroll infini..."
+];
+
+function updateUI() {
+  counter.innerText = `Points : ${points}`;
+  for (let key in upgrades) {
+    if (upgrades[key].btn) {
+      let up = upgrades[key];
+      up.btn.style.display = up.bought > 0 || points >= up.cost ? "block" : "none";
+      up.btn.disabled = (up.cost > points);
+      up.btn.innerText = `${up.emoji} ${up.name} (${up.cost}) x${up.bought}`;
+    }
+  }
+  prestigeBtn.disabled = points < 100000000;
+  prestigeBtn.innerText = `🔁 Prestige (100M) | Niveau : ${prestigeLevel}`;
+}
+
+function createUpgrades() {
+  upgradeList.innerHTML = "";
+  allUpgradeData.slice(0, unlockedUpgrades).forEach(upg => {
+    if (!upgrades[upg.name]) upgrades[upg.name] = { ...upg, bought: 0 };
+    const btn = document.createElement("button");
+    btn.className = "upgrade";
+    btn.style.display = "none";
+    btn.innerText = `${upg.emoji} ${upg.name} (${upg.cost}) x0`;
+    btn.onclick = () => {
+      if (points >= upgrades[upg.name].cost) {
+        points -= upgrades[upg.name].cost;
+        upgrades[upg.name].bought++;
+        upgrades[upg.name].effect();
+        saveGame();
+        updateUI();
+      }
+    };
+    upgrades[upg.name].btn = btn;
+    upgradeList.appendChild(btn);
+  });
+}
+
+// --- Gameplay ---
+document.getElementById("brainrot-img").addEventListener("click", function () {
+  points += perClick + prestigeLevel;
+  counter.innerText = `Points : ${points}`;
+  if (points % 5 === 0) {
+    quote.innerText = phrases[Math.floor(Math.random() * phrases.length)];
+  }
+  saveGame();
+  updateUI();
+});
+
+prestigeBtn.addEventListener("click", function () {
+  if (points >= 100000000) {
+    points = 0;
+    perClick = 1;
+    auto = 0;
+    prestigeLevel++;
+    upgrades = {};
+    unlockedUpgrades = 900;
+    upgradeList.innerHTML = "";
+    createUpgrades();
+    saveGame();
+    updateUI();
+    alert("✨ Prestige atteint ! +1 permanent par clic ✨");
+  }
+});
+
+setInterval(() => {
+  points += auto;
+  updateUI();
+  saveGame();
+}, 1000);
+
+// --- Initialisation ---
+loadGame();
+checkMonthlyUnlock();
+createUpgrades();
+updateUI();
+</script>
+</body>
+</html>
